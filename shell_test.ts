@@ -9,7 +9,10 @@ Deno.test(`Test Git command execution (non-zero result)`, async () => {
   );
   ta.assert(mod.isExecutionResult(result));
   if (mod.isExecutionResult(result)) {
-    ta.assert(result.stdErrOutput, "Error should be reported");
+    ta.assert(
+      result.stdErrOutput,
+      "Error should be reported since testDir is not a Git repo",
+    );
     ta.assertEquals(result.code, 128);
   }
   Deno.removeSync(testDir, { recursive: true });
