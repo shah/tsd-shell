@@ -189,6 +189,9 @@ export interface WalkShellCommandOptions extends RunShellCommandOptions {
   readonly onRunShellCommandResult?: (
     ctx: WalkShellEntryCmdResultContext,
   ) => void;
+  readonly enhanceWalkEntryContext?: (
+    ctx: WalkShellEntryContext,
+  ) => WalkShellEntryContext;
   readonly enhanceWalkResult?: (
     r: WalkShellCommandResult,
   ) => WalkShellCommandResult;
@@ -228,7 +231,10 @@ export async function walkShellCommand(
     const relPath = relPathSupplier
       ? relPathSupplier(we)
       : path.relative(Deno.cwd(), we.path);
-    const context = { we: we, relPath: relPath, index: filteredIndex };
+    let context = { we: we, relPath: relPath, index: filteredIndex };
+    if (walkShellOptions.enhanceWalkEntryContext) {
+      context = walkShellOptions.enhanceWalkEntryContext(context);
+    }
     if (!entryFilter || (entryFilter && entryFilter(context))) {
       const blockHeader = (): CliVerboseShellBlockHeaderResult => {
         return {
