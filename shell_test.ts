@@ -2,6 +2,12 @@ import { testingAsserts as ta } from "./deps-test.ts";
 import { fs } from "./deps.ts";
 import * as mod from "./mod.ts";
 
+const rejectEntries = mod.walkShellCmdEntryRejectGlobFilter(
+  ".",
+  ".git",
+  ".git/**",
+);
+
 Deno.test(`Test Git command execution (non-zero result)`, async () => {
   const testDir = Deno.makeTempDirSync();
   const result = await mod.runShellCommand(
@@ -75,16 +81,12 @@ Deno.test(`Test walk command execution with a single walkOptions for all walk en
       return `ls -l ${ctx.we.path}`;
     },
     {
-      entryFilter: (ctx: mod.WalkShellEntryContext): boolean => {
-        if (ctx.we.isDirectory && ctx.we.name == ".git") return false;
-        if (ctx.we.path.startsWith(".git")) return false;
-        return true;
-      },
+      entryFilter: rejectEntries,
       ...mod.quietShellOutputOptions,
     },
   );
   ta.assert(result.totalEntriesEncountered > 0);
-  ta.assertEquals(result.filteredEntriesEncountered, 10);
+  ta.assertEquals(result.filteredEntriesEncountered, 9);
 });
 
 export interface EnhancedRunShellCommandResult
@@ -134,11 +136,7 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
       }];
     },
     {
-      entryFilter: (ctx: mod.WalkShellEntryContext): boolean => {
-        if (ctx.we.isDirectory && ctx.we.name == ".git") return false;
-        if (ctx.we.path.startsWith(".git")) return false;
-        return true;
-      },
+      entryFilter: rejectEntries,
       onRunShellCommandResult: (ctx) => {
         results.push(ctx.execResult);
       },
@@ -157,12 +155,12 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
     },
   );
   ta.assert(result.totalEntriesEncountered > 0);
-  ta.assertEquals(result.filteredEntriesEncountered, 10);
+  ta.assertEquals(result.filteredEntriesEncountered, 9);
   ta.assert(isEnhancedWalkShellCommandResult(result));
   if (isEnhancedWalkShellCommandResult(result)) {
     ta.assertEquals(
       result.successfulEntries().length,
-      10,
+      9,
       "Each command executed should have been successful",
     );
   }

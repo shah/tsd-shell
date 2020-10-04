@@ -183,8 +183,27 @@ export async function runShellCommand(
   return result;
 }
 
+export interface WalkShellCommandEntryFilter {
+  (ctx: WalkShellEntryContext): boolean;
+}
+
+export function walkShellCmdEntryRejectGlobFilter(
+  ...globs: string[]
+): WalkShellCommandEntryFilter {
+  const regExps: RegExp[] = [];
+  for (const glob of globs) {
+    regExps.push(path.globToRegExp(glob));
+  }
+  return (ctx: WalkShellEntryContext): boolean => {
+    for (const re of regExps) {
+      if (re.test(ctx.we.path)) return false;
+    }
+    return true;
+  };
+}
+
 export interface WalkShellCommandOptions extends RunShellCommandOptions {
-  readonly entryFilter?: (ctx: WalkShellEntryContext) => boolean;
+  readonly entryFilter?: WalkShellCommandEntryFilter;
   readonly relPathSupplier?: (we: fs.WalkEntry) => string;
   readonly onRunShellCommandResult?: (
     ctx: WalkShellEntryCmdResultContext,
