@@ -5,7 +5,7 @@ import * as mod from "./mod.ts";
 Deno.test(`Test Git command execution (non-zero result)`, async () => {
   const testDir = Deno.makeTempDirSync();
   const result = await mod.runShellCommand(
-    { cmd: mod.commandComponents("git status -s"), cwd: testDir },
+    { cmd: mod.commandComponents("git status"), cwd: testDir },
   );
   ta.assert(mod.isExecutionResult(result));
   if (mod.isExecutionResult(result)) {
@@ -21,7 +21,7 @@ Deno.test(`Test Git command execution (non-zero result)`, async () => {
 Deno.test(`Test Git command execution (zero result)`, async () => {
   let cmdCodeEncountered = false;
   const result = await mod.runShellCommand(
-    "git status -s",
+    "git status",
     {
       onCmdComplete: (execResult) => {
         cmdCodeEncountered = true;
