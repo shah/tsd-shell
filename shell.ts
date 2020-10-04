@@ -56,6 +56,9 @@ export interface RunShellCommandOptions {
   readonly dryRun?: boolean;
   readonly onDryRun?: (drr: ShellCommandDryRunResult) => void;
   readonly onCmdComplete?: ShellCommandStatusHandler;
+  readonly enhanceRunShellCommandResult?: (
+    r: RunShellCommandResult,
+  ) => RunShellCommandResult;
 }
 
 export const quietShellOutputOptions: RunShellCommandOptions = {
@@ -133,22 +136,23 @@ export async function runShellCommand(
   command: Deno.RunOptions | string,
   rsCmdOpts: RunShellCommandOptions = {},
 ): Promise<RunShellCommandResult> {
+  let result: RunShellCommandResult;
   const denoRunOpts = typeof command === "string"
     ? {
       cmd: commandComponents(command),
     }
     : command;
   if (rsCmdOpts.dryRun) {
-    const result: ShellCommandDryRunResult = {
+    const drr: ShellCommandDryRunResult = {
       isRunShellCommandResult: true,
       isShellCommandDryRunResult: true,
       denoRunOpts: denoRunOpts,
       rsCmdOpts,
     };
     if (rsCmdOpts.onDryRun) {
-      rsCmdOpts.onDryRun(result);
+      rsCmdOpts.onDryRun(drr);
     }
-    return result;
+    result = drr;
   } else {
     denoRunOpts.stdout = "piped";
     denoRunOpts.stderr = "piped";
@@ -157,7 +161,7 @@ export async function runShellCommand(
     const { code } = await proc.status();
     const stdOut = await proc.output();
     const stdErrOutput = await proc.stderrOutput();
-    const result: RunShellCommandExecResult = {
+    const cer: RunShellCommandExecResult = {
       isRunShellCommandResult: true,
       isRunShellCommandExecResult: true,
       stdOut,
@@ -167,20 +171,23 @@ export async function runShellCommand(
       rsCmdOpts,
     };
     if (rsCmdOpts.onCmdComplete) {
-      rsCmdOpts.onCmdComplete(result);
+      rsCmdOpts.onCmdComplete(cer);
     }
     proc.close();
-    return result;
+    result = cer;
   }
+  return rsCmdOpts.enhanceRunShellCommandResult
+    ? rsCmdOpts.enhanceRunShellCommandResult(result)
+    : result;
 }
 
 export interface WalkShellCommandOptions extends RunShellCommandOptions {
   readonly entryFilter?: (ctx: WalkShellEntryContext) => boolean;
   readonly relPathSupplier?: (we: fs.WalkEntry) => string;
-  readonly onRunShellCommand?: (
+  readonly onRunShellCommandResult?: (
     ctx: WalkShellEntryCmdResultContext,
   ) => void;
-  readonly enhanceResult?: (
+  readonly enhanceWalkResult?: (
     r: WalkShellCommandResult,
   ) => WalkShellCommandResult;
 }
@@ -238,8 +245,8 @@ export async function walkShellCommand(
           ...cliVerboseShellBlockOutputOptions(blockHeader, rsCmdOptions),
         };
         const rscResult = await runShellCommand(cmd, rsCmdOptions);
-        if (walkShellOptions.onRunShellCommand) {
-          walkShellOptions.onRunShellCommand(
+        if (walkShellOptions.onRunShellCommandResult) {
+          walkShellOptions.onRunShellCommandResult(
             { ...context, execResult: rscResult },
           );
         }
@@ -249,8 +256,8 @@ export async function walkShellCommand(
           ...cliVerboseShellBlockOutputOptions(blockHeader, walkShellOptions),
         };
         const rscResult = await runShellCommand(runParams, rsCmdOptions);
-        if (walkShellOptions.onRunShellCommand) {
-          walkShellOptions.onRunShellCommand(
+        if (walkShellOptions.onRunShellCommandResult) {
+          walkShellOptions.onRunShellCommandResult(
             { ...context, execResult: rscResult },
           );
         }
@@ -264,7 +271,7 @@ export async function walkShellCommand(
     totalEntriesEncountered: fileIndex,
     filteredEntriesEncountered: filteredIndex,
   };
-  return walkShellOptions.enhanceResult
-    ? walkShellOptions.enhanceResult(result)
+  return walkShellOptions.enhanceWalkResult
+    ? walkShellOptions.enhanceWalkResult(result)
     : result;
 }

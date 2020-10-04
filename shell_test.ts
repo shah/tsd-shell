@@ -87,6 +87,18 @@ Deno.test(`Test walk command execution with a single walkOptions for all walk en
   ta.assertEquals(result.filteredEntriesEncountered, 10);
 });
 
+export interface EnhancedRunShellCommandResult
+  extends mod.RunShellCommandResult {
+  readonly isEnhancedRunShellCommandResult: true;
+  readonly successful: boolean;
+}
+
+export function isEnhancedRunShellCommandResult(
+  r: mod.RunShellCommandResult,
+): r is EnhancedRunShellCommandResult {
+  return "isEnhancedRunShellCommandResult" in r;
+}
+
 export interface EnhancedWalkShellCommandResult
   extends mod.WalkShellCommandResult {
   readonly isEnhancedWalkShellCommandResult: true;
@@ -108,7 +120,18 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
       Deno.RunOptions | string,
       mod.RunShellCommandOptions,
     ] => {
-      return [`ls -l ${ctx.we.path}`, mod.quietShellOutputOptions];
+      return [`ls -l ${ctx.we.path}`, {
+        enhanceRunShellCommandResult: (rscr): EnhancedRunShellCommandResult => {
+          return {
+            ...rscr,
+            isEnhancedRunShellCommandResult: true,
+            successful: mod.isDryRunResult(rscr)
+              ? true
+              : (mod.isExecutionResult(rscr) ? rscr.code == 0 : false),
+          };
+        },
+        ...mod.quietShellOutputOptions,
+      }];
     },
     {
       entryFilter: (ctx: mod.WalkShellEntryContext): boolean => {
@@ -116,17 +139,17 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
         if (ctx.we.path.startsWith(".git")) return false;
         return true;
       },
-      onRunShellCommand: (ctx) => {
+      onRunShellCommandResult: (ctx) => {
         results.push(ctx.execResult);
       },
-      enhanceResult: (r): EnhancedWalkShellCommandResult => {
+      enhanceWalkResult: (wscr): EnhancedWalkShellCommandResult => {
         return {
-          ...r,
+          ...wscr,
           isEnhancedWalkShellCommandResult: true,
           results: results,
           successfulEntries: (): mod.RunShellCommandResult[] => {
             return results.filter((r) =>
-              mod.isExecutionResult(r) && r.code == 0
+              isEnhancedRunShellCommandResult(r) && r.successful
             );
           },
         };
