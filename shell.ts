@@ -149,10 +149,12 @@ export async function runShellCommand(
       denoRunOpts: denoRunOpts,
       rsCmdOpts,
     };
+    result = rsCmdOpts.enhanceRunShellCommandResult
+      ? rsCmdOpts.enhanceRunShellCommandResult(drr)
+      : drr;
     if (rsCmdOpts.onDryRun) {
-      rsCmdOpts.onDryRun(drr);
+      rsCmdOpts.onDryRun(result as ShellCommandDryRunResult);
     }
-    result = drr;
   } else {
     denoRunOpts.stdout = "piped";
     denoRunOpts.stderr = "piped";
@@ -170,15 +172,15 @@ export async function runShellCommand(
       denoRunOpts,
       rsCmdOpts,
     };
-    if (rsCmdOpts.onCmdComplete) {
-      rsCmdOpts.onCmdComplete(cer);
-    }
     proc.close();
-    result = cer;
+    result = rsCmdOpts.enhanceRunShellCommandResult
+      ? rsCmdOpts.enhanceRunShellCommandResult(cer)
+      : cer;
+    if (rsCmdOpts.onCmdComplete) {
+      rsCmdOpts.onCmdComplete(result as RunShellCommandExecResult);
+    }
   }
-  return rsCmdOpts.enhanceRunShellCommandResult
-    ? rsCmdOpts.enhanceRunShellCommandResult(result)
-    : result;
+  return result;
 }
 
 export interface WalkShellCommandOptions extends RunShellCommandOptions {
