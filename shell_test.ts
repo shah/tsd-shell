@@ -83,9 +83,22 @@ Deno.test(`Test walk command execution with a single walkOptions for all walk en
       ...mod.quietShellOutputOptions,
     },
   );
-  ta.assert(result.totalEntriesProcessed > 0);
-  ta.assertEquals(result.filteredEntriesProcessed, 10);
+  ta.assert(result.totalEntriesEncountered > 0);
+  ta.assertEquals(result.filteredEntriesEncountered, 10);
 });
+
+export interface EnhancedWalkShellCommandResult
+  extends mod.WalkShellCommandResult {
+  readonly isEnhancedWalkShellCommandResult: true;
+  results: mod.RunShellCommandResult[];
+  successfulEntries: () => mod.RunShellCommandResult[];
+}
+
+export function isEnhancedWalkShellCommandResult(
+  r: mod.WalkShellCommandResult,
+): r is EnhancedWalkShellCommandResult {
+  return "isEnhancedWalkShellCommandResult" in r;
+}
 
 Deno.test(`Test walk command execution with walkOptions per walk entry and verify each entry's success`, async () => {
   const results: mod.RunShellCommandResult[] = [];
@@ -106,13 +119,28 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
       onRunShellCommand: (ctx) => {
         results.push(ctx.execResult);
       },
+      enhanceResult: (r): EnhancedWalkShellCommandResult => {
+        return {
+          ...r,
+          isEnhancedWalkShellCommandResult: true,
+          results: results,
+          successfulEntries: (): mod.RunShellCommandResult[] => {
+            return results.filter((r) =>
+              mod.isExecutionResult(r) && r.code == 0
+            );
+          },
+        };
+      },
     },
   );
-  ta.assertEquals(
-    results.filter((r) => mod.isExecutionResult(r) && r.code == 0).length,
-    10,
-    "Each command executed should have been successful",
-  );
-  ta.assert(result.totalEntriesProcessed > 0);
-  ta.assertEquals(result.filteredEntriesProcessed, 10);
+  ta.assert(result.totalEntriesEncountered > 0);
+  ta.assertEquals(result.filteredEntriesEncountered, 10);
+  ta.assert(isEnhancedWalkShellCommandResult(result));
+  if (isEnhancedWalkShellCommandResult(result)) {
+    ta.assertEquals(
+      result.successfulEntries().length,
+      10,
+      "Each command executed should have been successful",
+    );
+  }
 });

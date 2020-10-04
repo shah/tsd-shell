@@ -203,8 +203,9 @@ export interface WalkShellCommandSupplier {
 }
 
 export interface WalkShellCommandResult {
-  readonly totalEntriesProcessed: number;
-  readonly filteredEntriesProcessed: number;
+  readonly isWalkShellCommandResult: true;
+  readonly totalEntriesEncountered: number;
+  readonly filteredEntriesEncountered: number;
 }
 
 export async function walkShellCommand(
@@ -259,8 +260,9 @@ export async function walkShellCommand(
     fileIndex++;
   }
   const result: WalkShellCommandResult = {
-    totalEntriesProcessed: fileIndex,
-    filteredEntriesProcessed: filteredIndex,
+    isWalkShellCommandResult: true,
+    totalEntriesEncountered: fileIndex,
+    filteredEntriesEncountered: filteredIndex,
   };
   return walkShellOptions.enhanceResult
     ? walkShellOptions.enhanceResult(result)
