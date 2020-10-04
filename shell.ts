@@ -21,7 +21,8 @@ export function commandComponents(command: string): string[] {
 
 export interface RunShellCommandResult {
   readonly isRunShellCommandResult: true;
-  runOpts: Deno.RunOptions;
+  denoRunOpts: Deno.RunOptions;
+  rsCmdOpts: RunShellCommandOptions;
 }
 
 export interface ShellCommandDryRunResult extends RunShellCommandResult {
@@ -64,13 +65,13 @@ export const quietShellOutputOptions: RunShellCommandOptions = {
 
 export const cliVerboseShellOutputOptions: RunShellCommandOptions = {
   onDryRun: (drr: ShellCommandDryRunResult): void => {
-    if (drr.runOpts.cwd) {
-      console.log(`cd ${drr.runOpts.cwd}`);
+    if (drr.denoRunOpts.cwd) {
+      console.log(`cd ${drr.denoRunOpts.cwd}`);
     }
-    if (drr.runOpts.env) {
-      console.dir(drr.runOpts.env);
+    if (drr.denoRunOpts.env) {
+      console.dir(drr.denoRunOpts.env);
     }
-    console.log(drr.runOpts.cmd.join(" "));
+    console.log(drr.denoRunOpts.cmd.join(" "));
   },
   onCmdComplete: (er: RunShellCommandExecResult): void => {
     const writer = er.code == 0 ? Deno.stdout : Deno.stderr;
@@ -100,13 +101,13 @@ export function cliVerboseShellBlockOutputOptions(
       if (header.headerText) {
         Deno.stdout.writeSync(encode(header.headerText));
       }
-      if (drr.runOpts.cwd) {
-        console.log(`cd ${drr.runOpts.cwd}`);
+      if (drr.denoRunOpts.cwd) {
+        console.log(`cd ${drr.denoRunOpts.cwd}`);
       }
-      if (drr.runOpts.env) {
-        console.dir(drr.runOpts.env);
+      if (drr.denoRunOpts.env) {
+        console.dir(drr.denoRunOpts.env);
       }
-      console.log(drr.runOpts.cmd.join(" "));
+      console.log(drr.denoRunOpts.cmd.join(" "));
       if (header.separatorText) {
         Deno.stdout.writeSync(encode(header.separatorText));
       }
@@ -130,28 +131,29 @@ export function cliVerboseShellBlockOutputOptions(
 
 export async function runShellCommand(
   command: Deno.RunOptions | string,
-  { dryRun, onDryRun, onCmdComplete }: RunShellCommandOptions = {},
+  rsCmdOpts: RunShellCommandOptions = {},
 ): Promise<RunShellCommandResult> {
-  const runOpts = typeof command === "string"
+  const denoRunOpts = typeof command === "string"
     ? {
       cmd: commandComponents(command),
     }
     : command;
-  if (dryRun) {
+  if (rsCmdOpts.dryRun) {
     const result: ShellCommandDryRunResult = {
       isRunShellCommandResult: true,
       isShellCommandDryRunResult: true,
-      runOpts: runOpts,
+      denoRunOpts: denoRunOpts,
+      rsCmdOpts,
     };
-    if (onDryRun) {
-      onDryRun(result);
+    if (rsCmdOpts.onDryRun) {
+      rsCmdOpts.onDryRun(result);
     }
     return result;
   } else {
-    runOpts.stdout = "piped";
-    runOpts.stderr = "piped";
+    denoRunOpts.stdout = "piped";
+    denoRunOpts.stderr = "piped";
 
-    const proc = Deno.run(runOpts);
+    const proc = Deno.run(denoRunOpts);
     const { code } = await proc.status();
     const stdOut = await proc.output();
     const stdErrOutput = await proc.stderrOutput();
@@ -161,10 +163,11 @@ export async function runShellCommand(
       stdOut,
       code,
       stdErrOutput,
-      runOpts,
+      denoRunOpts,
+      rsCmdOpts,
     };
-    if (onCmdComplete) {
-      onCmdComplete(result);
+    if (rsCmdOpts.onCmdComplete) {
+      rsCmdOpts.onCmdComplete(result);
     }
     proc.close();
     return result;
@@ -174,6 +177,13 @@ export async function runShellCommand(
 export interface WalkShellCommandOptions extends RunShellCommandOptions {
   readonly entryFilter?: (ctx: WalkShellEntryContext) => boolean;
   readonly relPathSupplier?: (we: fs.WalkEntry) => string;
+  readonly onRunShellCommand?: (
+    we: fs.WalkEntry,
+    r: RunShellCommandResult,
+  ) => void;
+  readonly enhanceResult?: (
+    r: WalkShellCommandResult,
+  ) => WalkShellCommandResult;
 }
 
 export interface WalkShellEntryContext {
@@ -216,25 +226,36 @@ export async function walkShellCommand(
       const runParams = command(context);
       if (Array.isArray(runParams)) {
         const cmd = runParams[0];
-        const rsCmdOptions = runParams.length > 1
+        let rsCmdOptions = runParams.length > 1
           ? runParams[1]
           : walkShellOptions;
-        await runShellCommand(cmd, {
+        rsCmdOptions = {
           ...rsCmdOptions,
           ...cliVerboseShellBlockOutputOptions(blockHeader, rsCmdOptions),
-        });
+        };
+        const rscResult = await runShellCommand(cmd, rsCmdOptions);
+        if (walkShellOptions.onRunShellCommand) {
+          walkShellOptions.onRunShellCommand(we, rscResult);
+        }
       } else {
-        await runShellCommand(runParams, {
+        const rsCmdOptions = {
           ...walkShellOptions,
           ...cliVerboseShellBlockOutputOptions(blockHeader, walkShellOptions),
-        });
+        };
+        const rscResult = await runShellCommand(runParams, rsCmdOptions);
+        if (walkShellOptions.onRunShellCommand) {
+          walkShellOptions.onRunShellCommand(we, rscResult);
+        }
       }
       filteredIndex++;
     }
     fileIndex++;
   }
-  return {
+  const result: WalkShellCommandResult = {
     totalEntriesProcessed: fileIndex,
     filteredEntriesProcessed: filteredIndex,
   };
+  return walkShellOptions.enhanceResult
+    ? walkShellOptions.enhanceResult(result)
+    : result;
 }

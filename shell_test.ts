@@ -50,7 +50,7 @@ Deno.test(`Test Git command execution (dry run)`, async () => {
       dryRun: true,
       onDryRun: (drr) => {
         drrEncountered = true;
-        ta.assertEquals(drr.runOpts.cmd, ["git", "status", "-s"]);
+        ta.assertEquals(drr.denoRunOpts.cmd, ["git", "status", "-s"]);
       },
       onCmdComplete: () => {
         occEncountered = true;
@@ -68,7 +68,7 @@ Deno.test(`Test Git command execution (dry run)`, async () => {
   );
 });
 
-Deno.test(`Test walk command execution (single walkOptions for all walk entries)`, async () => {
+Deno.test(`Test walk command execution with a single walkOptions for all walk entries`, async () => {
   const result = await mod.walkShellCommand(
     fs.walkSync("."),
     (ctx): string => {
@@ -87,7 +87,8 @@ Deno.test(`Test walk command execution (single walkOptions for all walk entries)
   ta.assertEquals(result.filteredEntriesProcessed, 10);
 });
 
-Deno.test(`Test walk command execution (walkOptions per walk entry)`, async () => {
+Deno.test(`Test walk command execution with walkOptions per walk entry and verify each entry's success`, async () => {
+  const results: mod.RunShellCommandResult[] = [];
   const result = await mod.walkShellCommand(
     fs.walkSync("."),
     (ctx): [
@@ -102,7 +103,15 @@ Deno.test(`Test walk command execution (walkOptions per walk entry)`, async () =
         if (ctx.we.path.startsWith(".git")) return false;
         return true;
       },
+      onRunShellCommand: (we, result) => {
+        results.push(result);
+      },
     },
+  );
+  ta.assertEquals(
+    results.filter((r) => mod.isExecutionResult(r) && r.code == 0).length,
+    10,
+    "Each command executed should have been successful",
   );
   ta.assert(result.totalEntriesProcessed > 0);
   ta.assertEquals(result.filteredEntriesProcessed, 10);
