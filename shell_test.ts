@@ -68,7 +68,7 @@ Deno.test(`Test Git command execution (dry run)`, async () => {
   );
 });
 
-Deno.test(`Test walk command execution`, async () => {
+Deno.test(`Test walk command execution (single walkOptions for all walk entries)`, async () => {
   const result = await mod.walkShellCommand(
     fs.walkSync("."),
     (ctx): string => {
@@ -81,6 +81,27 @@ Deno.test(`Test walk command execution`, async () => {
         return true;
       },
       ...mod.quietShellOutputOptions,
+    },
+  );
+  ta.assert(result.totalEntriesProcessed > 0);
+  ta.assertEquals(result.filteredEntriesProcessed, 10);
+});
+
+Deno.test(`Test walk command execution (walkOptions per walkentry)`, async () => {
+  const result = await mod.walkShellCommand(
+    fs.walkSync("."),
+    (ctx): [
+      Deno.RunOptions | string,
+      mod.RunShellCommandOptions,
+    ] => {
+      return [`ls -l ${ctx.we.path}`, mod.quietShellOutputOptions];
+    },
+    {
+      entryFilter: (ctx: mod.WalkShellEntryContext): boolean => {
+        if (ctx.we.isDirectory && ctx.we.name == ".git") return false;
+        if (ctx.we.path.startsWith(".git")) return false;
+        return true;
+      },
     },
   );
   ta.assert(result.totalEntriesProcessed > 0);

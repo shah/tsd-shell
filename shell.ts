@@ -221,8 +221,7 @@ export async function walkShellCommand(
           : walkShellOptions;
         await runShellCommand(cmd, {
           ...rsCmdOptions,
-          ...walkShellOptions,
-          ...cliVerboseShellBlockOutputOptions(blockHeader, walkShellOptions),
+          ...cliVerboseShellBlockOutputOptions(blockHeader, rsCmdOptions),
         });
       } else {
         await runShellCommand(runParams, {
