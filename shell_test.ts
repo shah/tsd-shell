@@ -40,6 +40,7 @@ Deno.test(`Test Git command execution (zero result)`, async () => {
 
 Deno.test(`Test Git command execution (dry run)`, async () => {
   let drrEncountered = false;
+  let occEncountered = false;
   const result = await mod.runShellCommand(
     "git status -s",
     {
@@ -48,12 +49,19 @@ Deno.test(`Test Git command execution (dry run)`, async () => {
         drrEncountered = true;
         ta.assertEquals(drr.runOpts.cmd, ["git", "status", "-s"]);
       },
+      onCmdComplete: () => {
+        occEncountered = true;
+      },
     },
   );
   ta.assert(mod.isDryRunResult(result));
   ta.assert(
     drrEncountered,
     "drr not encountered, onDryRun did not execute",
+  );
+  ta.assert(
+    !occEncountered,
+    "occ encountered, onCmdComplete should not execute",
   );
 });
 
