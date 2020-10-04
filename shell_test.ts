@@ -168,7 +168,7 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
 
 // set this to true to try the walk on stdout, helps increase code coverage for
 // those functions that only emit to console (the test cases above are "quiet")
-const debugToStdOut = true;
+const debugToStdOut = false;
 
 if (debugToStdOut) {
   await mod.walkShellCommand(fs.walkSync("."), (ctx) => {
