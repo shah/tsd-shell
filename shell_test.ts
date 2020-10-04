@@ -17,7 +17,7 @@ Deno.test(`Test Git command execution (non-zero result)`, async () => {
 
 Deno.test(`Test Git command execution (zero result)`, async () => {
   let cmdCodeEncountered = false;
-  await mod.runShellCommand(
+  const result = await mod.runShellCommand(
     "git status -s",
     {
       onCmdComplete: (execResult) => {
@@ -31,6 +31,7 @@ Deno.test(`Test Git command execution (zero result)`, async () => {
       },
     },
   );
+  ta.assert(mod.isExecutionResult(result));
   ta.assert(
     cmdCodeEncountered,
     "Code not encountered, onCmdComplete did not execute",
