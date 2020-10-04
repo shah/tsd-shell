@@ -4,47 +4,55 @@ import * as mod from "./mod.ts";
 
 Deno.test(`Test Git command execution (non-zero result)`, async () => {
   const testDir = Deno.makeTempDirSync();
-  let statusMessage: unknown;
-  let errorEncountered: unknown;
-  await mod.runShellCommand(
+  const result = await mod.runShellCommand(
     { cmd: mod.commandComponents("git status -s"), cwd: testDir },
-    {
-      dryRun: false,
-      onSuccessStatus: (stdOut: Uint8Array): void => {
-        statusMessage = stdOut;
-      },
-      onNonZeroStatus: (stdErrOutput: Uint8Array): void => {
-        errorEncountered = stdErrOutput;
-      },
-    },
   );
-  ta.assert(errorEncountered, "Error should be reported");
-  ta.assert(
-    typeof statusMessage === "undefined",
-    "STDOUT should be empty",
-  );
+  ta.assert(mod.isExecutionResult(result));
+  if (mod.isExecutionResult(result)) {
+    ta.assert(result.stdErrOutput, "Error should be reported");
+    ta.assertEquals(result.code, 128);
+  }
   Deno.removeSync(testDir, { recursive: true });
 });
 
 Deno.test(`Test Git command execution (zero result)`, async () => {
-  let statusMessage: unknown;
-  let errorEncountered: unknown;
+  let cmdCodeEncountered = false;
   await mod.runShellCommand(
     "git status -s",
     {
-      dryRun: false,
-      onSuccessStatus: (stdOut: Uint8Array): void => {
-        statusMessage = stdOut;
-      },
-      onNonZeroStatus: (stdErrOutput: Uint8Array): void => {
-        errorEncountered = stdErrOutput;
+      onCmdComplete: (execResult) => {
+        cmdCodeEncountered = true;
+        ta.assertEquals(execResult.code, 0, "Command result should be zero");
+        ta.assert(execResult.stdOut.length > 0, "stdout should have content");
+        ta.assert(
+          execResult.stdErrOutput.length == 0,
+          "stderr should not have content",
+        );
       },
     },
   );
-  ta.assert(statusMessage, "Status should be reported");
   ta.assert(
-    typeof errorEncountered === "undefined",
-    "No error should be encountered",
+    cmdCodeEncountered,
+    "Code not encountered, onCmdComplete did not execute",
+  );
+});
+
+Deno.test(`Test Git command execution (dry run)`, async () => {
+  let drrEncountered = false;
+  const result = await mod.runShellCommand(
+    "git status -s",
+    {
+      dryRun: true,
+      onDryRun: (drr) => {
+        drrEncountered = true;
+        ta.assertEquals(drr.runOpts.cmd, ["git", "status", "-s"]);
+      },
+    },
+  );
+  ta.assert(mod.isDryRunResult(result));
+  ta.assert(
+    drrEncountered,
+    "drr not encountered, onDryRun did not execute",
   );
 });
 

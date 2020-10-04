@@ -19,40 +19,62 @@ export function commandComponents(command: string): string[] {
   return components;
 }
 
-export interface ShellCommandZeroStatusHandler {
-  (
-    stdOut: Uint8Array,
-    code: number,
-    runOpts: Deno.RunOptions,
-  ): void;
+export interface RunShellCommandResult {
+  readonly isRunShellCommandResult: true;
+  runOpts: Deno.RunOptions;
 }
 
-export interface ShellCommandNonZeroStatusHandler {
-  (
-    stdErrOutput: Uint8Array,
-    code: number,
-    stdOut: Uint8Array,
-    runOpts: Deno.RunOptions,
-  ): void;
+export interface ShellCommandDryRunResult extends RunShellCommandResult {
+  readonly isShellCommandDryRunResult: true;
+}
+
+export function isDryRunResult(
+  r: RunShellCommandResult,
+): r is ShellCommandDryRunResult {
+  return "isShellCommandDryRunResult" in r;
+}
+
+export interface RunShellCommandExecResult extends RunShellCommandResult {
+  readonly isRunShellCommandExecResult: true;
+  readonly code: number;
+  readonly stdOut: Uint8Array;
+  readonly stdErrOutput: Uint8Array;
+}
+
+export function isExecutionResult(
+  r: RunShellCommandResult,
+): r is RunShellCommandExecResult {
+  return "isRunShellCommandExecResult" in r;
+}
+
+export interface ShellCommandStatusHandler {
+  (er: RunShellCommandExecResult): void;
 }
 
 export interface RunShellCommandOptions {
   readonly dryRun?: boolean;
-  readonly onSuccessStatus?: ShellCommandZeroStatusHandler;
-  readonly onNonZeroStatus?: ShellCommandNonZeroStatusHandler;
+  readonly onDryRun?: (drr: ShellCommandDryRunResult) => void;
+  readonly onCmdComplete?: ShellCommandStatusHandler;
 }
 
 export const quietShellOutputOptions: RunShellCommandOptions = {
-  onSuccessStatus: (): void => {},
-  onNonZeroStatus: (): void => {},
+  onDryRun: (): void => {},
+  onCmdComplete: (): void => {},
 };
 
 export const cliVerboseShellOutputOptions: RunShellCommandOptions = {
-  onSuccessStatus: (rawOutput: Uint8Array): void => {
-    Deno.stdout.writeSync(rawOutput);
+  onDryRun: (drr: ShellCommandDryRunResult): void => {
+    if (drr.runOpts.cwd) {
+      console.log(`cd ${drr.runOpts.cwd}`);
+    }
+    if (drr.runOpts.env) {
+      console.dir(drr.runOpts.env);
+    }
+    console.log(drr.runOpts.cmd.join(" "));
   },
-  onNonZeroStatus: (rawOutput: Uint8Array): void => {
-    Deno.stderr.writeSync(rawOutput);
+  onCmdComplete: (er: RunShellCommandExecResult): void => {
+    const writer = er.code == 0 ? Deno.stdout : Deno.stderr;
+    writer.writeSync(er.code == 0 ? er.stdOut : er.stdErrOutput);
   },
 };
 
@@ -68,63 +90,63 @@ export function encode(input: Uint8Array | string): Uint8Array {
 
 export function cliVerboseShellBlockOutputOptions(
   blockHeader: (
-    code: number,
-    runOpts: Deno.RunOptions,
-    stdOut: Uint8Array,
-    stdErrOutput?: Uint8Array,
+    ctx: RunShellCommandResult,
   ) => CliVerboseShellBlockHeaderResult,
   override?: RunShellCommandOptions,
 ): RunShellCommandOptions {
   return {
-    onSuccessStatus: override?.onSuccessStatus || ((
-      stdOut: Uint8Array,
-      code: number,
-      runOpts: Deno.RunOptions,
-    ): void => {
-      const header = blockHeader(code, runOpts, stdOut);
+    onDryRun: (drr: ShellCommandDryRunResult): void => {
+      const header = blockHeader(drr);
       if (header.headerText) {
         Deno.stdout.writeSync(encode(header.headerText));
       }
-      if (!header.hideBlock) Deno.stdout.writeSync(stdOut);
+      if (drr.runOpts.cwd) {
+        console.log(`cd ${drr.runOpts.cwd}`);
+      }
+      if (drr.runOpts.env) {
+        console.dir(drr.runOpts.env);
+      }
+      console.log(drr.runOpts.cmd.join(" "));
       if (header.separatorText) {
         Deno.stdout.writeSync(encode(header.separatorText));
       }
-    }),
-    onNonZeroStatus: override?.onNonZeroStatus || ((
-      stdErrOutput: Uint8Array,
-      code: number,
-      stdOut: Uint8Array,
-      runOpts: Deno.RunOptions,
-    ): void => {
-      const header = blockHeader(code, runOpts, stdOut, stdErrOutput);
-      if (header.headerText) {
-        Deno.stderr.writeSync(encode(header.headerText));
-      }
-      if (!header.hideBlock) Deno.stderr.writeSync(stdErrOutput);
-      if (header.separatorText) {
-        Deno.stderr.writeSync(encode(header.separatorText));
-      }
-    }),
+    },
+    onCmdComplete: override?.onCmdComplete ||
+      ((er: RunShellCommandExecResult): void => {
+        const writer = er.code == 0 ? Deno.stdout : Deno.stderr;
+        const header = blockHeader(er);
+        if (header.headerText) {
+          writer.writeSync(encode(header.headerText));
+        }
+        if (!header.hideBlock) {
+          writer.writeSync(er.code == 0 ? er.stdOut : er.stdErrOutput);
+        }
+        if (header.separatorText) {
+          writer.writeSync(encode(header.separatorText));
+        }
+      }),
   };
 }
 
 export async function runShellCommand(
   command: Deno.RunOptions | string,
-  { dryRun, onSuccessStatus, onNonZeroStatus }: RunShellCommandOptions = {},
-): Promise<void> {
+  { dryRun, onDryRun, onCmdComplete }: RunShellCommandOptions = {},
+): Promise<RunShellCommandResult> {
   const runOpts = typeof command === "string"
     ? {
       cmd: commandComponents(command),
     }
     : command;
   if (dryRun) {
-    if (runOpts.cwd) {
-      console.log(`cd ${runOpts.cwd}`);
+    const result: ShellCommandDryRunResult = {
+      isRunShellCommandResult: true,
+      isShellCommandDryRunResult: true,
+      runOpts: runOpts,
+    };
+    if (onDryRun) {
+      onDryRun(result);
     }
-    if (runOpts.env) {
-      console.dir(runOpts.env);
-    }
-    console.log(runOpts.cmd.join(" "));
+    return result;
   } else {
     runOpts.stdout = "piped";
     runOpts.stderr = "piped";
@@ -132,17 +154,20 @@ export async function runShellCommand(
     const proc = Deno.run(runOpts);
     const { code } = await proc.status();
     const stdOut = await proc.output();
-    const stdErr = await proc.stderrOutput();
-    if (code === 0) {
-      if (onSuccessStatus) {
-        onSuccessStatus(stdOut, code, runOpts);
-      }
-    } else {
-      if (onNonZeroStatus) {
-        onNonZeroStatus(stdErr, code, stdOut, runOpts);
-      }
+    const stdErrOutput = await proc.stderrOutput();
+    const result: RunShellCommandExecResult = {
+      isRunShellCommandResult: true,
+      isRunShellCommandExecResult: true,
+      stdOut,
+      code,
+      stdErrOutput,
+      runOpts,
+    };
+    if (onCmdComplete) {
+      onCmdComplete(result);
     }
     proc.close();
+    return result;
   }
 }
 
