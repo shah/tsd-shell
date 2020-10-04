@@ -1,3 +1,5 @@
+import { fs, path } from "./deps.ts";
+
 export function commandComponents(command: string): string[] {
   // split components of the command with double-quotes support
   const splitCmdRegExp = /[^\s"]+|"([^"]*)"/gi;
@@ -34,93 +36,93 @@ export interface ShellCommandNonZeroStatusHandler {
   ): void;
 }
 
-export interface ShellCmdStatusReporter {
-  before?(
-    writer: Deno.WriterSync,
-    stdOut: Uint8Array,
-    code: number,
-    runOpts: Deno.RunOptions,
-  ): void;
-  after?(
-    writer: Deno.WriterSync,
-    stdOut: Uint8Array,
-    code: number,
-    runOpts: Deno.RunOptions,
-  ): void;
+export interface RunShellCommandOptions {
+  readonly dryRun?: boolean;
+  readonly onSuccessStatus?: ShellCommandZeroStatusHandler;
+  readonly onNonZeroStatus?: ShellCommandNonZeroStatusHandler;
 }
 
-export function postShellCmdBlockStatusReporter(
-  heading: string,
-): ShellCmdStatusReporter {
+export const quietShellOutputOptions: RunShellCommandOptions = {
+  onSuccessStatus: (): void => {},
+  onNonZeroStatus: (): void => {},
+};
+
+export const cliVerboseShellOutputOptions: RunShellCommandOptions = {
+  onSuccessStatus: (rawOutput: Uint8Array): void => {
+    Deno.stdout.writeSync(rawOutput);
+  },
+  onNonZeroStatus: (rawOutput: Uint8Array): void => {
+    Deno.stderr.writeSync(rawOutput);
+  },
+};
+
+export interface CliVerboseShellBlockHeaderResult {
+  headerText?: Uint8Array | string;
+  hideBlock?: boolean;
+  separatorText?: Uint8Array | string;
+}
+
+export function cliVerboseShellBlockOutputOptions(
+  blockHeader: (
+    code: number,
+    runOpts: Deno.RunOptions,
+    stdOut: Uint8Array,
+    stdErrOutput?: Uint8Array,
+  ) => CliVerboseShellBlockHeaderResult,
+  override?: RunShellCommandOptions,
+): RunShellCommandOptions {
   return {
-    before: (
-      writer: Deno.WriterSync,
-    ): void => {
-      // if Deno.Run produced any output, add a heading
-      writer.writeSync(new TextEncoder().encode(heading + "\n"));
-    },
-    after: (
-      writer: Deno.WriterSync,
+    onSuccessStatus: override?.onSuccessStatus || ((
       stdOut: Uint8Array,
+      code: number,
+      runOpts: Deno.RunOptions,
     ): void => {
-      // if Deno.Run produced any output, add a blank line (otherwise nothing)
-      const text = new TextDecoder().decode(stdOut);
-      if (text.trim()) {
-        writer.writeSync(new TextEncoder().encode(""));
+      const header = blockHeader(code, runOpts, stdOut);
+      if (header.headerText) {
+        Deno.stdout.writeSync(
+          typeof header.headerText === "string"
+            ? new TextEncoder().encode(header.headerText)
+            : header.headerText,
+        );
       }
-    },
+      if (!header.hideBlock) Deno.stdout.writeSync(stdOut);
+      if (header.separatorText) {
+        Deno.stdout.writeSync(
+          typeof header.separatorText === "string"
+            ? new TextEncoder().encode(header.separatorText)
+            : header.separatorText,
+        );
+      }
+    }),
+    onNonZeroStatus: override?.onNonZeroStatus || ((
+      stdErrOutput: Uint8Array,
+      code: number,
+      stdOut: Uint8Array,
+      runOpts: Deno.RunOptions,
+    ): void => {
+      const header = blockHeader(code, runOpts, stdOut, stdErrOutput);
+      if (header.headerText) {
+        Deno.stderr.writeSync(
+          typeof header.headerText === "string"
+            ? new TextEncoder().encode(header.headerText)
+            : header.headerText,
+        );
+      }
+      if (!header.hideBlock) Deno.stderr.writeSync(stdErrOutput);
+      if (header.separatorText) {
+        Deno.stderr.writeSync(
+          typeof header.separatorText === "string"
+            ? new TextEncoder().encode(header.separatorText)
+            : header.separatorText,
+        );
+      }
+    }),
   };
-}
-
-export function prepShellCmdStdOutReporter(
-  reporter: ShellCmdStatusReporter,
-): ShellCommandZeroStatusHandler {
-  return (
-    stdOut: Uint8Array,
-    code: number,
-    runOpts: Deno.RunOptions,
-  ): void => {
-    if (reporter.before) reporter.before(Deno.stdout, stdOut, code, runOpts);
-    Deno.stdout.writeSync(stdOut);
-    if (reporter.after) reporter.after(Deno.stdout, stdOut, code, runOpts);
-  };
-}
-
-export function prepShellCmdStdErrReporter(
-  reporter: ShellCmdStatusReporter,
-): ShellCommandNonZeroStatusHandler {
-  return (
-    stdErrOutput: Uint8Array,
-    code: number,
-    stdOut: Uint8Array,
-    runOpts: Deno.RunOptions,
-  ): void => {
-    if (reporter.before) {
-      reporter.before(Deno.stderr, stdErrOutput, code, runOpts);
-    }
-    Deno.stdout.writeSync(stdOut);
-    Deno.stderr.writeSync(stdErrOutput);
-    if (reporter.after) {
-      reporter.after(Deno.stderr, stdErrOutput, code, runOpts);
-    }
-  };
-}
-
-export function shellCmdStdOutHandler(rawOutput: Uint8Array): void {
-  Deno.stdout.writeSync(rawOutput);
-}
-
-export function shellCmdStdErrHandler(rawOutput: Uint8Array): void {
-  Deno.stderr.writeSync(rawOutput);
 }
 
 export async function runShellCommand(
   command: Deno.RunOptions | string,
-  { dryRun, onSuccessStatus, onNonZeroStatus }: {
-    readonly dryRun?: boolean;
-    readonly onSuccessStatus?: ShellCommandZeroStatusHandler;
-    readonly onNonZeroStatus?: ShellCommandNonZeroStatusHandler;
-  },
+  { dryRun, onSuccessStatus, onNonZeroStatus }: RunShellCommandOptions = {},
 ): Promise<void> {
   const runOpts = typeof command === "string"
     ? {
@@ -142,12 +144,12 @@ export async function runShellCommand(
     const proc = Deno.run(runOpts);
     const { code } = await proc.status();
     const stdOut = await proc.output();
+    const stdErr = await proc.stderrOutput();
     if (code === 0) {
       if (onSuccessStatus) {
         onSuccessStatus(stdOut, code, runOpts);
       }
     } else {
-      const stdErr = await proc.stderrOutput();
       if (onNonZeroStatus) {
         onNonZeroStatus(stdErr, code, stdOut, runOpts);
       }
@@ -156,5 +158,71 @@ export async function runShellCommand(
   }
 }
 
-//https://deno.land/x/shell_tag@v0.0.1
-//https://deno.land/x/execute@v1.1.0
+export interface WalkShellCommandOptions extends RunShellCommandOptions {
+  readonly entryFilter?: (ctx: WalkShellEntryContext) => boolean;
+  readonly relPathSupplier?: (we: fs.WalkEntry) => string;
+}
+
+export interface WalkShellEntryContext {
+  we: fs.WalkEntry;
+  relPath: string;
+  index: number;
+}
+
+export interface WalkShellCommandSupplier {
+  (ctx: WalkShellEntryContext): (Deno.RunOptions | string) | [
+    Deno.RunOptions | string,
+    RunShellCommandOptions,
+  ];
+}
+
+export interface WalkShellCommandResult {
+  readonly totalEntriesProcessed: number;
+  readonly filteredEntriesProcessed: number;
+}
+
+export async function walkShellCommand(
+  walkEntries: IterableIterator<fs.WalkEntry>,
+  command: WalkShellCommandSupplier,
+  walkShellOptions: WalkShellCommandOptions = {},
+): Promise<WalkShellCommandResult> {
+  let [fileIndex, filteredIndex] = [0, 0];
+  const { entryFilter, relPathSupplier } = walkShellOptions;
+  for (const we of walkEntries) {
+    const relPath = relPathSupplier
+      ? relPathSupplier(we)
+      : path.relative(Deno.cwd(), we.path);
+    const context = { we: we, relPath: relPath, index: filteredIndex };
+    if (!entryFilter || (entryFilter && entryFilter(context))) {
+      const blockHeader = (): CliVerboseShellBlockHeaderResult => {
+        return {
+          headerText: `${relPath}\n`,
+          separatorText: "\n",
+        };
+      };
+      const runParams = command(context);
+      if (Array.isArray(runParams)) {
+        const cmd = runParams[0];
+        const rsCmdOptions = runParams.length > 1
+          ? runParams[1]
+          : walkShellOptions;
+        await runShellCommand(cmd, {
+          ...rsCmdOptions,
+          ...walkShellOptions,
+          ...cliVerboseShellBlockOutputOptions(blockHeader, walkShellOptions),
+        });
+      } else {
+        await runShellCommand(runParams, {
+          ...walkShellOptions,
+          ...cliVerboseShellBlockOutputOptions(blockHeader, walkShellOptions),
+        });
+      }
+      filteredIndex++;
+    }
+    fileIndex++;
+  }
+  return {
+    totalEntriesProcessed: fileIndex,
+    filteredEntriesProcessed: filteredIndex,
+  };
+}
