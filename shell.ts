@@ -83,13 +83,9 @@ export const cliVerboseShellOutputOptions: RunShellCommandOptions = {
 };
 
 export interface CliVerboseShellBlockHeaderResult {
-  headerText?: Uint8Array | string;
+  headerText?: string;
   hideBlock?: boolean;
-  separatorText?: Uint8Array | string;
-}
-
-export function encode(input: Uint8Array | string): Uint8Array {
-  return typeof input === "string" ? new TextEncoder().encode(input) : input;
+  separatorText?: string;
 }
 
 export function cliVerboseShellBlockOutputOptions(
@@ -102,31 +98,34 @@ export function cliVerboseShellBlockOutputOptions(
     onDryRun: override?.onDryRun || ((drr: ShellCommandDryRunResult): void => {
       const header = blockHeader(drr);
       if (header.headerText) {
-        Deno.stdout.writeSync(encode(header.headerText));
+        console.log(`%c${header.headerText}`, "color:yellow;font-weight:bold");
       }
       if (drr.denoRunOpts.cwd) {
-        console.log(`cd ${drr.denoRunOpts.cwd}`);
+        console.log(`%ccd ${drr.denoRunOpts.cwd}`, "color:lighgrey");
       }
       if (drr.denoRunOpts.env) {
         console.dir(drr.denoRunOpts.env);
       }
       console.log(drr.denoRunOpts.cmd.join(" "));
-      if (header.separatorText) {
-        Deno.stdout.writeSync(encode(header.separatorText));
+      if (typeof header.separatorText !== "undefined") {
+        console.log(header.separatorText);
       }
     }),
     onCmdComplete: override?.onCmdComplete ||
       ((er: RunShellCommandExecResult): void => {
-        const writer = er.code == 0 ? Deno.stdout : Deno.stderr;
         const header = blockHeader(er);
         if (header.headerText) {
-          writer.writeSync(encode(header.headerText));
+          console.log(
+            `%c${header.headerText}`,
+            "color:yellow;font-weight:bold",
+          );
         }
         if (!header.hideBlock) {
-          writer.writeSync(er.code == 0 ? er.stdOut : er.stdErrOutput);
+          Deno.stdout.writeSync(er.stdOut);
+          Deno.stderr.writeSync(er.stdErrOutput);
         }
-        if (header.separatorText) {
-          writer.writeSync(encode(header.separatorText));
+        if (typeof header.separatorText !== "undefined") {
+          console.log(header.separatorText);
         }
       }),
   };
@@ -257,8 +256,8 @@ export async function walkShellCommand(
     if (!entryFilter || (entryFilter && entryFilter(context))) {
       const blockHeader = (): CliVerboseShellBlockHeaderResult => {
         return {
-          headerText: `${relPath}\n`,
-          separatorText: "\n",
+          headerText: `${relPath}`,
+          separatorText: "",
         };
       };
       const runParams = command(context);
