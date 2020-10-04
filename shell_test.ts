@@ -168,10 +168,10 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
 
 // set this to true to try the walk on stdout, helps increase code coverage for
 // those functions that only emit to console (the test cases above are "quiet")
-const debugToStdOut = false;
+const debugToStdOut = true;
 
 if (debugToStdOut) {
   await mod.walkShellCommand(fs.walkSync("."), (ctx) => {
-    return `echo "${ctx.walkEntryIndex} ${ctx.walkEntryRelPath}"`;
-  }, { entryFilter: rejectEntries });
+    return `echo -e "\\e[4m${ctx.walkEntryIndex}\\e[0m ${ctx.walkEntryRelPath}"`;
+  }, { dryRun: false, entryFilter: rejectEntries });
 }
