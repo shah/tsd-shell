@@ -78,7 +78,7 @@ Deno.test(`Test walk command execution with a single walkOptions for all walk en
   const result = await mod.walkShellCommand(
     fs.walkSync("."),
     (ctx): string => {
-      return `ls -l ${ctx.we.path}`;
+      return `ls -l ${ctx.walkEntry.path}`;
     },
     {
       entryFilter: rejectEntries,
@@ -122,7 +122,7 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
       Deno.RunOptions | string,
       mod.RunShellCommandOptions,
     ] => {
-      return [`ls -l ${ctx.we.path}`, {
+      return [`ls -l ${ctx.walkEntry.path}`, {
         enhanceRunShellCommandResult: (rscr): EnhancedRunShellCommandResult => {
           return {
             ...rscr,
@@ -138,7 +138,7 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
     {
       entryFilter: rejectEntries,
       onRunShellCommandResult: (ctx) => {
-        results.push(ctx.execResult);
+        results.push(ctx);
       },
       enhanceWalkResult: (wscr): EnhancedWalkShellCommandResult => {
         return {

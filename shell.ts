@@ -196,7 +196,7 @@ export function walkShellCmdEntryRejectGlobFilter(
   }
   return (ctx: WalkShellEntryContext): boolean => {
     for (const re of regExps) {
-      if (re.test(ctx.we.path)) return false;
+      if (re.test(ctx.walkEntry.path)) return false;
     }
     return true;
   };
@@ -206,7 +206,7 @@ export interface WalkShellCommandOptions extends RunShellCommandOptions {
   readonly entryFilter?: WalkShellCommandEntryFilter;
   readonly relPathSupplier?: (we: fs.WalkEntry) => string;
   readonly onRunShellCommandResult?: (
-    ctx: WalkShellEntryCmdResultContext,
+    ctx: WalkShellEntryContext & RunShellCommandResult,
   ) => void;
   readonly enhanceWalkEntryContext?: (
     ctx: WalkShellEntryContext,
@@ -217,13 +217,9 @@ export interface WalkShellCommandOptions extends RunShellCommandOptions {
 }
 
 export interface WalkShellEntryContext {
-  we: fs.WalkEntry;
-  relPath: string;
-  index: number;
-}
-
-export interface WalkShellEntryCmdResultContext {
-  execResult: RunShellCommandResult;
+  walkEntry: fs.WalkEntry;
+  walkEntryRelPath: string;
+  walkEntryIndex: number;
 }
 
 export interface WalkShellCommandSupplier {
@@ -250,7 +246,11 @@ export async function walkShellCommand(
     const relPath = relPathSupplier
       ? relPathSupplier(we)
       : path.relative(Deno.cwd(), we.path);
-    let context = { we: we, relPath: relPath, index: filteredIndex };
+    let context: WalkShellEntryContext = {
+      walkEntry: we,
+      walkEntryRelPath: relPath,
+      walkEntryIndex: filteredIndex,
+    };
     if (walkShellOptions.enhanceWalkEntryContext) {
       context = walkShellOptions.enhanceWalkEntryContext(context);
     }
@@ -274,7 +274,7 @@ export async function walkShellCommand(
         const rscResult = await runShellCommand(cmd, rsCmdOptions);
         if (walkShellOptions.onRunShellCommandResult) {
           walkShellOptions.onRunShellCommandResult(
-            { ...context, execResult: rscResult },
+            { ...context, ...rscResult },
           );
         }
       } else {
@@ -285,7 +285,7 @@ export async function walkShellCommand(
         const rscResult = await runShellCommand(runParams, rsCmdOptions);
         if (walkShellOptions.onRunShellCommandResult) {
           walkShellOptions.onRunShellCommandResult(
-            { ...context, execResult: rscResult },
+            { ...context, ...rscResult },
           );
         }
       }
