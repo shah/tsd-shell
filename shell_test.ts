@@ -87,7 +87,7 @@ Deno.test(`Test walk command execution (single walkOptions for all walk entries)
   ta.assertEquals(result.filteredEntriesProcessed, 10);
 });
 
-Deno.test(`Test walk command execution (walkOptions per walkentry)`, async () => {
+Deno.test(`Test walk command execution (walkOptions per walk entry)`, async () => {
   const result = await mod.walkShellCommand(
     fs.walkSync("."),
     (ctx): [
