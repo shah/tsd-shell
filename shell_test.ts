@@ -103,8 +103,8 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
         if (ctx.we.path.startsWith(".git")) return false;
         return true;
       },
-      onRunShellCommand: (we, result) => {
-        results.push(result);
+      onRunShellCommand: (ctx) => {
+        results.push(ctx.execResult);
       },
     },
   );

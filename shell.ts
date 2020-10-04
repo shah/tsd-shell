@@ -178,8 +178,7 @@ export interface WalkShellCommandOptions extends RunShellCommandOptions {
   readonly entryFilter?: (ctx: WalkShellEntryContext) => boolean;
   readonly relPathSupplier?: (we: fs.WalkEntry) => string;
   readonly onRunShellCommand?: (
-    we: fs.WalkEntry,
-    r: RunShellCommandResult,
+    ctx: WalkShellEntryCmdResultContext,
   ) => void;
   readonly enhanceResult?: (
     r: WalkShellCommandResult,
@@ -190,6 +189,10 @@ export interface WalkShellEntryContext {
   we: fs.WalkEntry;
   relPath: string;
   index: number;
+}
+
+export interface WalkShellEntryCmdResultContext {
+  execResult: RunShellCommandResult;
 }
 
 export interface WalkShellCommandSupplier {
@@ -235,7 +238,9 @@ export async function walkShellCommand(
         };
         const rscResult = await runShellCommand(cmd, rsCmdOptions);
         if (walkShellOptions.onRunShellCommand) {
-          walkShellOptions.onRunShellCommand(we, rscResult);
+          walkShellOptions.onRunShellCommand(
+            { ...context, execResult: rscResult },
+          );
         }
       } else {
         const rsCmdOptions = {
@@ -244,7 +249,9 @@ export async function walkShellCommand(
         };
         const rscResult = await runShellCommand(runParams, rsCmdOptions);
         if (walkShellOptions.onRunShellCommand) {
-          walkShellOptions.onRunShellCommand(we, rscResult);
+          walkShellOptions.onRunShellCommand(
+            { ...context, execResult: rscResult },
+          );
         }
       }
       filteredIndex++;
