@@ -64,6 +64,6 @@ Deno.test(`Test walk command execution`, async () => {
       ...mod.quietShellOutputOptions,
     },
   );
-  assertEquals(result.totalEntriesProcessed, 67);
+  assertEquals(result.totalEntriesProcessed, 83);
   assertEquals(result.filteredEntriesProcessed, 10);
 });

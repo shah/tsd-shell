@@ -62,6 +62,10 @@ export interface CliVerboseShellBlockHeaderResult {
   separatorText?: Uint8Array | string;
 }
 
+export function encode(input: Uint8Array | string): Uint8Array {
+  return typeof input === "string" ? new TextEncoder().encode(input) : input;
+}
+
 export function cliVerboseShellBlockOutputOptions(
   blockHeader: (
     code: number,
@@ -79,19 +83,11 @@ export function cliVerboseShellBlockOutputOptions(
     ): void => {
       const header = blockHeader(code, runOpts, stdOut);
       if (header.headerText) {
-        Deno.stdout.writeSync(
-          typeof header.headerText === "string"
-            ? new TextEncoder().encode(header.headerText)
-            : header.headerText,
-        );
+        Deno.stdout.writeSync(encode(header.headerText));
       }
       if (!header.hideBlock) Deno.stdout.writeSync(stdOut);
       if (header.separatorText) {
-        Deno.stdout.writeSync(
-          typeof header.separatorText === "string"
-            ? new TextEncoder().encode(header.separatorText)
-            : header.separatorText,
-        );
+        Deno.stdout.writeSync(encode(header.separatorText));
       }
     }),
     onNonZeroStatus: override?.onNonZeroStatus || ((
@@ -102,19 +98,11 @@ export function cliVerboseShellBlockOutputOptions(
     ): void => {
       const header = blockHeader(code, runOpts, stdOut, stdErrOutput);
       if (header.headerText) {
-        Deno.stderr.writeSync(
-          typeof header.headerText === "string"
-            ? new TextEncoder().encode(header.headerText)
-            : header.headerText,
-        );
+        Deno.stderr.writeSync(encode(header.headerText));
       }
       if (!header.hideBlock) Deno.stderr.writeSync(stdErrOutput);
       if (header.separatorText) {
-        Deno.stderr.writeSync(
-          typeof header.separatorText === "string"
-            ? new TextEncoder().encode(header.separatorText)
-            : header.separatorText,
-        );
+        Deno.stderr.writeSync(encode(header.separatorText));
       }
     }),
   };
