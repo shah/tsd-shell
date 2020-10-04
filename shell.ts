@@ -99,7 +99,7 @@ export function cliVerboseShellBlockOutputOptions(
   override?: RunShellCommandOptions,
 ): RunShellCommandOptions {
   return {
-    onDryRun: (drr: ShellCommandDryRunResult): void => {
+    onDryRun: override?.onDryRun || ((drr: ShellCommandDryRunResult): void => {
       const header = blockHeader(drr);
       if (header.headerText) {
         Deno.stdout.writeSync(encode(header.headerText));
@@ -114,7 +114,7 @@ export function cliVerboseShellBlockOutputOptions(
       if (header.separatorText) {
         Deno.stdout.writeSync(encode(header.separatorText));
       }
-    },
+    }),
     onCmdComplete: override?.onCmdComplete ||
       ((er: RunShellCommandExecResult): void => {
         const writer = er.code == 0 ? Deno.stdout : Deno.stderr;
