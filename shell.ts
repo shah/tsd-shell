@@ -21,8 +21,8 @@ export function commandComponents(command: string): string[] {
 
 export interface RunShellCommandResult {
   readonly isRunShellCommandResult: true;
-  denoRunOpts: Deno.RunOptions;
-  rsCmdOpts: RunShellCommandOptions;
+  readonly denoRunOpts: Deno.RunOptions;
+  readonly rsCmdOpts: RunShellCommandOptions;
 }
 
 export interface ShellCommandDryRunResult extends RunShellCommandResult {
@@ -33,6 +33,17 @@ export function isDryRunResult(
   r: RunShellCommandResult,
 ): r is ShellCommandDryRunResult {
   return "isShellCommandDryRunResult" in r;
+}
+
+export interface ShellCommandExceptionResult extends RunShellCommandResult {
+  readonly isShellCommandExceptionResult: true;
+  readonly error: Error;
+}
+
+export function isShellCommandExceptionResult(
+  r: RunShellCommandResult,
+): r is ShellCommandExceptionResult {
+  return "isShellCommandExceptionResult" in r;
 }
 
 export interface RunShellCommandExecResult extends RunShellCommandResult {
@@ -131,16 +142,22 @@ export function cliVerboseShellBlockOutputOptions(
   };
 }
 
+export function buildDenoRunOpts(
+  command: Deno.RunOptions | string,
+): Deno.RunOptions {
+  return typeof command === "string"
+    ? {
+      cmd: commandComponents(command),
+    }
+    : command;
+}
+
 export async function runShellCommand(
   command: Deno.RunOptions | string,
   rsCmdOpts: RunShellCommandOptions = {},
 ): Promise<RunShellCommandResult> {
   let result: RunShellCommandResult;
-  const denoRunOpts = typeof command === "string"
-    ? {
-      cmd: commandComponents(command),
-    }
-    : command;
+  const denoRunOpts = buildDenoRunOpts(command);
   if (rsCmdOpts.dryRun) {
     const drr: ShellCommandDryRunResult = {
       isRunShellCommandResult: true,
@@ -180,6 +197,29 @@ export async function runShellCommand(
     }
   }
   return result;
+}
+
+export async function runShellCommandSafely(
+  command: Deno.RunOptions | string,
+  rsCmdOpts: RunShellCommandOptions & {
+    onException?: (scer: ShellCommandExceptionResult) => RunShellCommandResult;
+  } = {},
+): Promise<RunShellCommandResult> {
+  try {
+    return await runShellCommand(command, rsCmdOpts);
+  } catch (err) {
+    const result: ShellCommandExceptionResult = {
+      isRunShellCommandResult: true,
+      isShellCommandExceptionResult: true,
+      denoRunOpts: buildDenoRunOpts(command),
+      rsCmdOpts: rsCmdOpts,
+      error: err,
+    };
+    if (rsCmdOpts.onException) {
+      return rsCmdOpts.onException(result);
+    }
+    return result;
+  }
 }
 
 export interface WalkShellCommandEntryFilter {

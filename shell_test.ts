@@ -8,6 +8,25 @@ const rejectEntries = mod.walkShellCmdEntryRejectGlobFilter(
   ".git/**",
 );
 
+Deno.test(`Test invalid command which produces Deno exception (non-zero result)`, async () => {
+  ta.assertThrowsAsync(async () => {
+    await mod.runShellCommand(
+      { cmd: mod.commandComponents("bad command --with --params") },
+    );
+  });
+
+  const result = await mod.runShellCommandSafely(
+    { cmd: mod.commandComponents("bad command --with --params") },
+  );
+  ta.assert(mod.isShellCommandExceptionResult(result));
+  if (mod.isShellCommandExceptionResult(result)) {
+    ta.assert(
+      result.error,
+      "Error should be trapped and reported",
+    );
+  }
+});
+
 Deno.test(`Test Git command execution (non-zero result)`, async () => {
   const testDir = Deno.makeTempDirSync();
   const result = await mod.runShellCommand(
