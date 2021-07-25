@@ -48,7 +48,7 @@ export function startListenableService(
           const conn = await Deno.connect({ port: options.port });
           conn.close();
           return true;
-        } catch (err) {
+        } catch (_err) {
           Deno.sleepSync(waitTime);
           waited += waitTime;
           if (waited > timeoutMS) return false;
