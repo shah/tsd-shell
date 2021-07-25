@@ -105,7 +105,7 @@ Deno.test(`Test walk command execution with a single walkOptions for all walk en
     },
   );
   ta.assert(result.totalEntriesEncountered > 0);
-  ta.assertEquals(result.filteredEntriesEncountered, 10);
+  ta.assertEquals(result.filteredEntriesEncountered, 8);
 });
 
 export interface EnhancedRunShellCommandResult
@@ -174,12 +174,12 @@ Deno.test(`Test walk command execution with walkOptions per walk entry and verif
     },
   );
   ta.assert(result.totalEntriesEncountered > 0);
-  ta.assertEquals(result.filteredEntriesEncountered, 10);
+  ta.assertEquals(result.filteredEntriesEncountered, 8);
   ta.assert(isEnhancedWalkShellCommandResult(result));
   if (isEnhancedWalkShellCommandResult(result)) {
     ta.assertEquals(
       result.successfulEntries().length,
-      10,
+      8,
       "Each command executed should have been successful",
     );
   }
